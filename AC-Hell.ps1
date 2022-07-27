@@ -3,8 +3,7 @@ clear
 "The following variables still need to be informed from an external file or input
 * source
 * destination
-* groupid
-* drive letter swapping"
+* groupid"
 
 
 
