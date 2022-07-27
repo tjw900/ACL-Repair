@@ -1,36 +1,39 @@
-﻿clear
+clear
 
 "The following variables still need to be informed from an external file or input
-* toplevel
-* groupname
+* source
+* destination
+* groupid
 * drive letter swapping"
 
 
 
 # Initilaises important group information
 # Needs to be changed to work with an input file rather than be hard coded
-$groupname = "res_drhvcep"
+
+$source = "U:\"
+
+$destination = "Y:\group_drhvcep\"
+
+$groupid = "res_drhvcep"
+
+
 
 $starttime = [datetime]::Now
 
 $filename = $starttime.DateTime.replace(":","-")
 
-Start-Transcript -Path "$PSScriptRoot\$groupname, $filename.csv"
+Start-Transcript -Path "$PSScriptRoot\$groupid, $filename.csv"
 
 echo "Starting at " $starttime
-
-
-
-
-$toplevel = "U:\"
 
 # Regex pattern used to identify members of the group
 $pattern = '(?<=CN=).+?(?=\,)'
 
 # Finds the members of the top level group and adds UNCLE\ to the front of their names
-# Input is the main fim group used for this share from the variable $groupname
+# Input is the main fim group used for this share from the variable $groupid
 # Output is a list of users with UNCLE\ appended to the front in the variable $group
-$aclgroup = get-adgroup $groupname -properties * | select -expandproperty member
+$aclgroup = get-adgroup $groupid -properties * | select -expandproperty member
 $group = [regex]::Matches($aclgroup, $pattern).value
 $tempgroup = $group
 $group = @()
@@ -40,8 +43,8 @@ foreach ($member in $tempgroup)
     $group = $group+$member
 }
 
-# Makes the groupname accessible from other functions
-$groupname = "UNCLE\"+$groupname
+# Makes the groupid accessible from other functions
+$groupid = "UNCLE\"+$groupid
 
 # List of SIDs that are not moving to OnTap, used to filter lists below
 # Will need to be constantly updated with newly found legacy SID's
@@ -56,7 +59,7 @@ $winsys = New-Object System.Security.AccessControl.FileSystemAccessRule("UNCLE\W
 
 # Recursively gets all directories from the specified top level and performs the cleansing operation on each directory found
 # Needs to be changed to work with an input file rather than be hard coded
-get-childitem -directory $toplevel -recurse | foreach-object{   
+get-childitem -directory $source -recurse | foreach-object{   
     # Compares the access of the current folder and its parent folder
     # Output is the differences between the two ACL's in text form in the variable $comp
     $acl = (($PSItem.fullname | get-acl).access | sort-object -property identityreference -unique).identityreference.value
@@ -88,7 +91,7 @@ get-childitem -directory $toplevel -recurse | foreach-object{
 
         # If the ACL contains the group and a user, checks if the user is part of the group
         # If the user is part of the group, removes the explicit user permission
-        if ($acl -contains $groupname)
+        if ($acl -contains $groupid)
         {
             foreach ($user in $group)
                 {
@@ -118,7 +121,7 @@ get-childitem -directory $toplevel -recurse | foreach-object{
 
             # Overwrites the existing ACL in ONTAP with the clean ACL, aiming at the same directory in another drive letter
             # This change will cascade down and apply to all folders and files underneath the target folder
-            $emptyacl | set-acl $PSItem.fullname.replace("U:\","Y:\group_drhvcep\")
+            $emptyacl | set-acl $PSItem.fullname.replace($source,$destination)
         }
     }
 }
