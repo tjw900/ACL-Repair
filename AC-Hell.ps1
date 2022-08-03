@@ -6,11 +6,11 @@ $CSVData = Import-Csv "$PSScriptRoot\migrationlocations.csv"
 # Needs to be changed to work with an input file rather than be hard coded
 foreach ($line in $CSVData)
 {
-    $source = $line.source
+    $source = $CSVData.source
 
-    $destination = $line.destination
+    $destination = $CSVData.destination
 
-    $groupid = $line.group
+    $groupid = $CSVData.group
 
     $starttime = [datetime]::Now
 
