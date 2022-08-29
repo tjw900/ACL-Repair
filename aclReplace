@@ -1,0 +1,38 @@
+clear
+
+$exclusions = "UNCLE\Win_Sys_Admins","UNCLE\BigKev","UNCLE\arcs_ad_admin","UNCLE\spomigrate","UNCLE\unother","UNCLE\admin_tier1nas","UNCLE\admin_tier2nas","UNCLE\admin_tier3nas"
+$exclusions = $exclusions + "EVERYONE","CREATOR OWNER","NT AUTHORITY\SYSTEM","BUILTIN\Users","BUILTIN\Administrators","S-1-5-32-767","S-1-5-32-766"
+
+$pathlist = import-csv "$PSScriptRoot\paths.csv"
+
+$winsys = New-Object System.Security.AccessControl.FileSystemAccessRule("UNCLE\Win_Sys_Admins","FullControl","ContainerInherit, ObjectInherit","None","Allow")
+
+foreach ($entry in $pathlist.path)
+{
+    $acl = (get-acl -literalpath $entry).access | sort-object -property identityreference -unique
+    
+    foreach ($exclusion in $exclusions)
+    {
+        $acl = $acl | Where-Object {$PSitem.identityreference.value -ne $exclusion}
+    }
+
+    $newacl = New-Object System.Security.AccessControl.DirectorySecurity
+    $newacl.AddAccessRule($winsys)
+
+    foreach ($ace in $acl)
+    {
+        if ($ace.FileSystemRights -like "*FullControl*")
+        {
+            $newace = New-Object System.Security.AccessControl.FileSystemAccessRule($ace.IdentityReference.value,"Modify","ContainerInherit, ObjectInherit","None",$ace.AccessControlType)
+        }
+        else
+        {
+            $newace = New-Object System.Security.AccessControl.FileSystemAccessRule($ace.IdentityReference.value,$ace.FileSystemRights,"ContainerInherit, ObjectInherit","None",$ace.AccessControlType)
+        }
+        $newacl.AddAccessRule($newace)
+    }
+    $newacl.accesstostring
+
+    # Needs to be changed to work with each path:
+    $newacl | set-acl -literalpath $entry.replace("\\zrs1\project_","\\ressvm01.newcastle.edu.au\")
+}
