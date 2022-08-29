@@ -1,0 +1,45 @@
+clear
+
+# Need to replace with imported CSV
+$shares = Import-Csv $PSScriptRoot\shareList.csv
+foreach ($toplevel in $shares)
+{
+    $toplevel.value +" is now being scanned"
+
+    $name = $toplevel.value.split("_")[1]
+    
+    try{mkdir "\\ressvm01.newcastle.edu.au\migration\zrsScans\$name" -erroraction silentlycontinue}catch{}
+    $toplevel.value +" is now being scanned" | out-file "\\ressvm01.newcastle.edu.au\migration\zrsScans\$name\ZRS_ACLdifferences.csv" -Append
+
+    # List of groups that are not required after migration
+    $exclusions = "UNCLE\Win_Sys_Admins","UNCLE\BigKev","UNCLE\arcs_ad_admin","UNCLE\spomigrate","UNCLE\admin_tier1nas","UNCLE\admin_tier2nas","UNCLE\admin_tier3nas","UNCLE\unother"
+    $exclusions = $exclusions + "EVERYONE","CREATOR OWNER","NT AUTHORITY\SYSTEM","BUILTIN\Users","BUILTIN\Administrators","S-1-5-32-767","S-1-5-32-766","S-1-5-18-1-0","S-1-5-18-2-1"
+
+    # Recursively gets the permission for each folder
+    get-childitem -directory -recurse $toplevel.value | foreach-object{
+        $acl = (get-acl -literalpath $PSItem.fullname).access | sort-object -property identityreference -unique
+        $pacl= (get-acl -literalpath $PSItem.parent.fullname).access | sort-object -property identityreference -unique
+
+        # Removes the excluded groups from acl
+        foreach ($exclusion in $exclusions)
+        {
+            $acl = $acl | Where-Object {$PSitem.identityreference.value -ne $exclusion}
+            $pacl = $pacl | Where-Object {$PSItem.identityreference.value -ne $exclusion}
+        }
+
+        # Finds any differences between access rules between the folder and its parent
+        $names = (compare-object $acl.identityreference.value $pacl.identityreference.value).inputobject
+        $levels = (compare-object $acl.filesystemrights $pacl.filesystemrights).inputobject
+        $enabled = (compare-object $acl.accesscontroltype $pacl.accesscontroltype).inputobject
+    
+        # Reports the folder path if there are any minor differences
+        if ($names+$levels+$enabled -ne $null) 
+        {
+            $PSItem.fullname;
+            $PSItem.fullname | out-file "\\ressvm01.newcastle.edu.au\migration\zrsScans\$name\ZRS_ACLdifferences.csv" -Append
+        }
+
+        # Line 28 needs to output to the correct file
+    }
+    $toplevel.value +" has finished scanning" | out-file "\\ressvm01.newcastle.edu.au\migration\zrsScans\$name\ZRS_ACLdifferences.csv" -Append
+}
